@@ -1,37 +1,63 @@
-point1 = [0,0, 0,0, 1.989 * 10^30];
-point2 = [149597870700,0, 0, 30000, 5.972 * 10^24];
+PlanetName = ["Sun", "Earth", "Moon", "Mars"];
 
-G = 6.67*10^-11;
+frameRate = 1 / 60;
+timestepConstant = 3600 * 24;
 
-fakepoint = [0,0];
+timeSpeed = 100;
 
-figure(1);
+predictionDays = 30;
+referenceBody = 2;
+
+% X Y Vx Vy Mass
+PlanetMatrix = [
+    0,0, 0,0, 1.989 * 10^30;
+    149597870700,0, 0, 2592000000, 5.972 * 10^24;
+    149597870700 + 384400000, 0, 0, 2592000000 + 1022 * timestepConstant, 7.34767309*10^22;
+    227936637242, 0, 0, 24080 * timestepConstant, 6.41693*10^23;
+];
+
+[axis, g, fig] = CreateUi()
+CreateUiControls(g, PlanetName)
+
+planetPlot = plot(axis, PlanetMatrix(:,1), PlanetMatrix(:,2), "o");
+
+planetLabels = gobjects(size(PlanetMatrix, 1), 1);
+
+for i = 1:size(PlanetMatrix,1)
+    planetLabels(i) = text(axis, PlanetMatrix(i,1), PlanetMatrix(i,2), PlanetName(i), "VerticalAlignment", "bottom", "HorizontalAlignment", "left");
+end
+
+Trajectory = PredictTrajectory(PlanetMatrix, predictionDays, timestepConstant, frameRate, timeSpeed);
+trajectoryPlots = gobjects(size(PlanetMatrix,1),1);
+
+for i = 1:size(PlanetMatrix, 1)
+    relativeX = Trajectory(:,i,1) - Trajectory(:,referenceBody,1);
+    relativeY = Trajectory(:,i,2) - Trajectory(:,referenceBody,2);
+
+    trajectoryPlots(i) = plot(axis, relativeX, relativeY, "--");
+end
 
 while true
-
-    direction = (point1([1 2]) - point2([1 2])) / norm(point1([1 2]) - point2([1 2]));
-    distance = norm(point1([1 2]) - point2([1 2]));
-
-    force = G*((point1(5) * point2(5))/distance^2);
-
-    acceleration1 = force / point1(5);
-    accelerationVector1 = -direction * acceleration1;
-
-    acceleration2 = force / point2(5);
-    accelerationVector2 = direction * acceleration2;
-
-    point1([3 4]) = point1([3 4]) + accelerationVector1;
-    point2([3 4]) = point2([3 4]) + accelerationVector2;
-
-    point1([1 2]) = point1([1 2]) + point1([3 4]);
-    point2([1 2]) = point2([1 2]) + point2([3 4]);
-
-    plot(point1(1), point1(2), "o");
-    hold on;
-    plot(point2(1), point2(2), "o");
-    hold off;
-
-    axis([(-0.1 * 10^10) (0.1 * 10^10) (-0.1 * 10^10)  (0.1 * 10^10)] * 1000)
-
-    pause(0.000001);
+    if fig.UserData.paused == false
+        delta_t = frameRate * timeSpeed;
+    
+        InitialAccelerationMatrix = CalculateAcceleration(PlanetMatrix, timestepConstant);
+        
+        PlanetMatrix(:, 1:2) = PlanetMatrix(:, 1:2) + PlanetMatrix(:, [3 4]) * delta_t + 0.5 * InitialAccelerationMatrix * delta_t^2;
+    
+        NewAccelerationMatrix = CalculateAcceleration(PlanetMatrix, timestepConstant);
+    
+        PlanetMatrix(:, 3:4) = PlanetMatrix(:, 3:4) + 0.5 * (InitialAccelerationMatrix +  NewAccelerationMatrix) * delta_t;
+        
+        referencePosition = PlanetMatrix(referenceBody, 1:2);
+        relativePosition = PlanetMatrix(:, 1:2) - referencePosition;
+        
+        planetPlot.XData = relativePosition(:,1);
+        planetPlot.YData = relativePosition(:,2);
+    
+        for i = 1:size(PlanetMatrix,1)
+            planetLabels(i).Position(1:2) = relativePosition(i,:);
+        end
+    end
+    pause(frameRate);
 end
